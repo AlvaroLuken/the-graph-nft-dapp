@@ -1,22 +1,18 @@
 import { ethers } from 'ethers';
 import './App.css';
 import React from 'react';
-import greeterJSON from './utils/Greeter.json';
-import vendingMachineJSON from './utils/VendingMachine.json';
-const greeterAddress = "0x21f99BB0b1d91aADb4753B7A07842Ef448cB82b7";
-const vendingMachineAddress = "0xb0bf7Ba98d1ceA8a4Ff8556Ab8381B2E92d4C823";
+import axios from 'axios';
+
+const url = "https://api.thegraph.com/subgraphs/name/wighawag/eip721-subgraph";
 
 function App() {
-  // pure JavaScript
-  // 1. Set Up MetaMask API (provider + requestAccounts)
+  const [imageUrl, setImageUrl] = React.useState("");
+  const [images, setImages] = React.useState([]);
   const [address, setAddress] = React.useState("");
   const [balance, setBalance] = React.useState(0);
-  const [currentGreeting, setCurrentGreeting] = React.useState("");
-  const [revolutionRequests, setRevolutionRequests] = React.useState(0);
   React.useEffect(() => {
     // this logic will run, every time the page reloads
-    getGreetingFromGreeter();
-    setCurrentRevolutionRequests();
+    queryWalletNFTs();
   });
   const { ethereum } = window;
   let provider;
@@ -30,37 +26,14 @@ function App() {
   } else {
     console.log("Hey, install MetaMask!");
   }
-  // 2. Create a Contract Instance (using ethers.js)
 
-  // 3. Place this contract instance in a function, and link this function to a button
+  ethereum.on('chainChanged', (chainId) => {
+    displayUserDetails();
+  });
 
-  async function getGreetingFromGreeter() {
-    const signer = await provider.getSigner();
-    const contractInstance = new ethers.Contract(greeterAddress, greeterJSON.abi, signer);
-    const currentGreeting = await contractInstance.greet();
-    setCurrentGreeting(currentGreeting);
-  }
-
-  async function setGreeting() {
-    const signer = await provider.getSigner();
-    const contractInstance = new ethers.Contract(greeterAddress, greeterJSON.abi, signer);
-    await contractInstance.setGreeting("Hey Class 1! Go ChainShot!");
-  }
-
-  async function callForRevolution() {
-    const signer = await provider.getSigner();
-    const contractInstance = new ethers.Contract(vendingMachineAddress, vendingMachineJSON, signer);
-    await contractInstance.revolution();
-    let currentRequests = await contractInstance.revolutionRequests();
-    setRevolutionRequests(currentRequests.toString());
-  }
-
-  async function setCurrentRevolutionRequests() {
-    const signer = await provider.getSigner();
-    const contractInstance = new ethers.Contract(vendingMachineAddress, vendingMachineJSON, signer);
-    let currentRequests = await contractInstance.revolutionRequests();
-    setRevolutionRequests(currentRequests.toString());
-  }
+  ethereum.on('accountsChanged', (accounts) => {
+    displayUserDetails();
+  });
 
   async function displayUserDetails() {
     const signer = await provider.getSigner();
@@ -70,7 +43,44 @@ function App() {
     setBalance(ethers.utils.formatEther(userBalance));
   }
 
+  async function queryWalletNFTs() {
+    const query = `{
+      owners(first: 10, where:{id: "0x5f8E477B694859Cd6B792cD1cec9Dea319be53a5"}) {
+        tokens {
+          tokenID
+          tokenURI
+        }
+      }
+    }`;
+    const response = await axios.post(url, {
+      query,
+      // variables: TODO
+    });
+    console.log(response);
+    let arrayResponse = response.data.data.owners[0].tokens;
+    let uris = [];
 
+    arrayResponse.forEach((element, index) => {
+      uris.push(element.tokenURI);
+    });
+
+    console.log(uris);
+
+    let tempImages = [];
+
+    for(let i = 0; i < uris.length; i++) {
+      try {
+        let response = await axios.get(uris[i]);
+        tempImages.push(response.data.image);
+      } catch (err) {
+        console.log(err);
+      }
+      
+    }
+    console.log(imageUrl);
+    setImages(tempImages);
+    
+  }
   
   return (
     <div className="App">
@@ -84,32 +94,13 @@ function App() {
         <p>
           <b>Your balance:</b> {balance}
         </p>
-        <p>
-          <b>The current Greeter greeting: </b> {currentGreeting}
-        </p>
-        <p>
-          <b>The current number of revolution requests: </b> {revolutionRequests}
-        </p>
+
+        {images.map((image, index) => {
+            return (
+                <div src={image}/>
+            )
+        })}
       </div>
-      <button className="my-button" onClick={getGreetingFromGreeter}>
-        Get Current Greeting
-      </button>
-      <p>
-      </p>
-      <button className="my-button" onClick={setGreeting}>
-        Set Greeting
-      </button>
-      <p>
-      </p>
-      <button className="my-button" onClick={callForRevolution}>
-        Revolution!
-      </button>
-      <p>
-      </p>
-      <button className="my-button" onClick={setCurrentRevolutionRequests}>
-        What's The State of Revolution?
-      </button>
-      
     </div>
   );
 }
